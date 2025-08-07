@@ -2,6 +2,7 @@
 """
 Collection of helper functions
 """
+
 import copy
 import glob
 import os
@@ -148,14 +149,10 @@ def log_data_info(
     )
 
     logging_function(
-        "First 10 words (gls): {}".format(
-            " ".join("(%d) %s" % (i, t) for i, t in enumerate(gls_vocab.itos[:10]))
-        )
+        "First 10 words (gls): {}".format(" ".join("(%d) %s" % (i, t) for i, t in enumerate(gls_vocab.itos[:10])))
     )
     logging_function(
-        "First 10 words (txt): {}".format(
-            " ".join("(%d) %s" % (i, t) for i, t in enumerate(txt_vocab.itos[:10]))
-        )
+        "First 10 words (txt): {}".format(" ".join("(%d) %s" % (i, t) for i, t in enumerate(txt_vocab.itos[:10])))
     )
 
     logging_function("Number of unique glosses (types): {}".format(len(gls_vocab)))
@@ -233,14 +230,7 @@ def tile(x: Tensor, count: int, dim=0) -> Tensor:
     out_size = list(x.size())
     out_size[0] *= count
     batch = x.size(0)
-    x = (
-        x.view(batch, -1)
-        .transpose(0, 1)
-        .repeat(count, 1)
-        .transpose(0, 1)
-        .contiguous()
-        .view(*out_size)
-    )
+    x = x.view(batch, -1).transpose(0, 1).repeat(count, 1).transpose(0, 1).contiguous().view(*out_size)
     if dim != 0:
         x = x.permute(perm).contiguous()
     return x

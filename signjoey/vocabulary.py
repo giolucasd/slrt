@@ -13,7 +13,7 @@ EOS_TOKEN = "</s>"
 
 
 class Vocabulary:
-    """ Vocabulary represents mapping between tokens and indices. """
+    """Vocabulary represents mapping between tokens and indices."""
 
     def __init__(self):
         # don't rename stoi and itos since needed for torchtext
@@ -176,13 +176,13 @@ class GlossVocabulary(Vocabulary):
 
 
 def filter_min(counter: Counter, minimum_freq: int):
-    """ Filter counter by min frequency """
+    """Filter counter by min frequency"""
     filtered_counter = Counter({t: c for t, c in counter.items() if c >= minimum_freq})
     return filtered_counter
 
 
 def sort_and_cut(counter: Counter, limit: int):
-    """ Cut counter to most frequent,
+    """Cut counter to most frequent,
     sorted numerically and alphabetically"""
     # sort by frequency, then alphabetically
     tokens_and_frequencies = sorted(counter.items(), key=lambda tup: tup[0])
@@ -191,9 +191,7 @@ def sort_and_cut(counter: Counter, limit: int):
     return vocab_tokens
 
 
-def build_vocab(
-    field: str, max_size: int, min_freq: int, dataset: Dataset, vocab_file: str = None
-) -> Vocabulary:
+def build_vocab(field: str, max_size: int, min_freq: int, dataset: Dataset, vocab_file: str = None) -> Vocabulary:
     """
     Builds vocabulary for a torchtext `field` from given`dataset` or
     `vocab_file`.

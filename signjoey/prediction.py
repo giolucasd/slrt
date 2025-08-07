@@ -1,13 +1,9 @@
-#!/usr/bin/env python
 import torch
-
-torch.backends.cudnn.deterministic = True
 
 import logging
 import numpy as np
 import pickle as pickle
 import time
-import torch.nn as nn
 
 from typing import List
 from torchtext.data import Dataset
@@ -28,8 +24,9 @@ from signjoey.phoenix_utils.phoenix_cleanup import (
     clean_phoenix_2014_trans,
 )
 
+torch.backends.cudnn.deterministic = True
 
-# pylint: disable=too-many-arguments,too-many-locals,no-member
+
 def validate_on_data(
     model: SignModel,
     data: Dataset,
@@ -135,18 +132,10 @@ def validate_on_data(
 
             batch_recognition_loss, batch_translation_loss = model.get_loss_for_batch(
                 batch=batch,
-                recognition_loss_function=recognition_loss_function
-                if do_recognition
-                else None,
-                translation_loss_function=translation_loss_function
-                if do_translation
-                else None,
-                recognition_loss_weight=recognition_loss_weight
-                if do_recognition
-                else None,
-                translation_loss_weight=translation_loss_weight
-                if do_translation
-                else None,
+                recognition_loss_function=recognition_loss_function if do_recognition else None,
+                translation_loss_function=translation_loss_function if do_translation else None,
+                recognition_loss_weight=recognition_loss_weight if do_recognition else None,
+                translation_loss_weight=translation_loss_weight if do_translation else None,
             )
             if do_recognition:
                 total_recognition_loss += batch_recognition_loss
@@ -164,34 +153,22 @@ def validate_on_data(
                 batch=batch,
                 recognition_beam_size=recognition_beam_size if do_recognition else None,
                 translation_beam_size=translation_beam_size if do_translation else None,
-                translation_beam_alpha=translation_beam_alpha
-                if do_translation
-                else None,
-                translation_max_output_length=translation_max_output_length
-                if do_translation
-                else None,
+                translation_beam_alpha=translation_beam_alpha if do_translation else None,
+                translation_max_output_length=translation_max_output_length if do_translation else None,
             )
 
             # sort outputs back to original order
             if do_recognition:
-                all_gls_outputs.extend(
-                    [batch_gls_predictions[sri] for sri in sort_reverse_index]
-                )
+                all_gls_outputs.extend([batch_gls_predictions[sri] for sri in sort_reverse_index])
             if do_translation:
                 all_txt_outputs.extend(batch_txt_predictions[sort_reverse_index])
             all_attention_scores.extend(
-                batch_attention_scores[sort_reverse_index]
-                if batch_attention_scores is not None
-                else []
+                batch_attention_scores[sort_reverse_index] if batch_attention_scores is not None else []
             )
 
         if do_recognition:
             assert len(all_gls_outputs) == len(data)
-            if (
-                recognition_loss_function is not None
-                and recognition_loss_weight != 0
-                and total_num_gls_tokens > 0
-            ):
+            if recognition_loss_function is not None and recognition_loss_weight != 0 and total_num_gls_tokens > 0:
                 valid_recognition_loss = total_recognition_loss
             else:
                 valid_recognition_loss = -1
@@ -216,11 +193,7 @@ def validate_on_data(
 
         if do_translation:
             assert len(all_txt_outputs) == len(data)
-            if (
-                translation_loss_function is not None
-                and translation_loss_weight != 0
-                and total_num_txt_tokens > 0
-            ):
+            if translation_loss_function is not None and translation_loss_weight != 0 and total_num_txt_tokens > 0:
                 # total validation translation loss
                 valid_translation_loss = total_translation_loss
                 # exponent of token-level negative log prob
@@ -277,9 +250,7 @@ def validate_on_data(
 
 
 # pylint: disable-msg=logging-too-many-args
-def test(
-    cfg_file, ckpt: str, output_path: str = None, logger: logging.Logger = None
-) -> None:
+def test(cfg_file, ckpt: str, output_path: str = None, logger: logging.Logger = None) -> None:
     """
     Main test function. Handles loading a model from checkpoint, generating
     translations and storing them and attention plots.
@@ -307,18 +278,14 @@ def test(
         model_dir = cfg["training"]["model_dir"]
         ckpt = get_latest_checkpoint(model_dir)
         if ckpt is None:
-            raise FileNotFoundError(
-                "No checkpoint found in directory {}.".format(model_dir)
-            )
+            raise FileNotFoundError("No checkpoint found in directory {}.".format(model_dir))
 
     batch_size = cfg["training"]["batch_size"]
     batch_type = cfg["training"].get("batch_type", "sentence")
     use_cuda = cfg["training"].get("use_cuda", False)
     level = cfg["data"]["level"]
     dataset_version = cfg["data"].get("version", "phoenix_2014_trans")
-    translation_max_output_length = cfg["training"].get(
-        "translation_max_output_length", None
-    )
+    translation_max_output_length = cfg["training"].get("translation_max_output_length", None)
 
     # load the data
     _, dev_data, test_data, gls_vocab, txt_vocab = load_data(data_cfg=cfg["data"])
@@ -360,22 +327,16 @@ def test(
         translation_beam_alphas = [-1]
 
     if "testing" in cfg.keys():
-        max_recognition_beam_size = cfg["testing"].get(
-            "max_recognition_beam_size", None
-        )
+        max_recognition_beam_size = cfg["testing"].get("max_recognition_beam_size", None)
         if max_recognition_beam_size is not None:
             recognition_beam_sizes = list(range(1, max_recognition_beam_size + 1))
 
     if do_recognition:
-        recognition_loss_function = torch.nn.CTCLoss(
-            blank=model.gls_vocab.stoi[SIL_TOKEN], zero_infinity=True
-        )
+        recognition_loss_function = torch.nn.CTCLoss(blank=model.gls_vocab.stoi[SIL_TOKEN], zero_infinity=True)
         if use_cuda:
             recognition_loss_function.cuda()
     if do_translation:
-        translation_loss_function = XentLoss(
-            pad_index=txt_vocab.stoi[PAD_TOKEN], smoothing=0.0
-        )
+        translation_loss_function = XentLoss(pad_index=txt_vocab.stoi[PAD_TOKEN], smoothing=0.0)
         if use_cuda:
             translation_loss_function.cuda()
 
@@ -409,13 +370,9 @@ def test(
                 recognition_beam_size=rbw,
                 # Translation Parameters
                 do_translation=do_translation,
-                translation_loss_function=translation_loss_function
-                if do_translation
-                else None,
+                translation_loss_function=translation_loss_function if do_translation else None,
                 translation_loss_weight=1 if do_translation else None,
-                translation_max_output_length=translation_max_output_length
-                if do_translation
-                else None,
+                translation_max_output_length=translation_max_output_length if do_translation else None,
                 level=level if do_translation else None,
                 translation_beam_size=1 if do_translation else None,
                 translation_beam_alpha=-1 if do_translation else None,
@@ -433,15 +390,9 @@ def test(
                     "WER %3.2f\t(DEL: %3.2f,\tINS: %3.2f,\tSUB: %3.2f)",
                     dev_best_recognition_beam_size,
                     dev_best_recognition_result["valid_scores"]["wer"],
-                    dev_best_recognition_result["valid_scores"]["wer_scores"][
-                        "del_rate"
-                    ],
-                    dev_best_recognition_result["valid_scores"]["wer_scores"][
-                        "ins_rate"
-                    ],
-                    dev_best_recognition_result["valid_scores"]["wer_scores"][
-                        "sub_rate"
-                    ],
+                    dev_best_recognition_result["valid_scores"]["wer_scores"]["del_rate"],
+                    dev_best_recognition_result["valid_scores"]["wer_scores"]["ins_rate"],
+                    dev_best_recognition_result["valid_scores"]["wer_scores"]["sub_rate"],
                 )
                 logger.info("*" * 60)
 
@@ -466,9 +417,7 @@ def test(
                     batch_type=batch_type,
                     dataset_version=dataset_version,
                     do_recognition=do_recognition,
-                    recognition_loss_function=recognition_loss_function
-                    if do_recognition
-                    else None,
+                    recognition_loss_function=recognition_loss_function if do_recognition else None,
                     recognition_loss_weight=1 if do_recognition else None,
                     recognition_beam_size=1 if do_recognition else None,
                     do_translation=do_translation,
@@ -481,13 +430,8 @@ def test(
                     frame_subsampling_ratio=frame_subsampling_ratio,
                 )
 
-                if (
-                    dev_translation_results[tbw][ta]["valid_scores"]["bleu"]
-                    > dev_best_bleu_score
-                ):
-                    dev_best_bleu_score = dev_translation_results[tbw][ta][
-                        "valid_scores"
-                    ]["bleu"]
+                if dev_translation_results[tbw][ta]["valid_scores"]["bleu"] > dev_best_bleu_score:
+                    dev_best_bleu_score = dev_translation_results[tbw][ta]["valid_scores"]["bleu"]
                     dev_best_translation_beam_size = tbw
                     dev_best_translation_alpha = ta
                     dev_best_translation_result = dev_translation_results[tbw][ta]
@@ -500,18 +444,10 @@ def test(
                         dev_best_translation_beam_size,
                         dev_best_translation_alpha,
                         dev_best_translation_result["valid_scores"]["bleu"],
-                        dev_best_translation_result["valid_scores"]["bleu_scores"][
-                            "bleu1"
-                        ],
-                        dev_best_translation_result["valid_scores"]["bleu_scores"][
-                            "bleu2"
-                        ],
-                        dev_best_translation_result["valid_scores"]["bleu_scores"][
-                            "bleu3"
-                        ],
-                        dev_best_translation_result["valid_scores"]["bleu_scores"][
-                            "bleu4"
-                        ],
+                        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu1"],
+                        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu2"],
+                        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu3"],
+                        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu4"],
                         dev_best_translation_result["valid_scores"]["chrf"],
                         dev_best_translation_result["valid_scores"]["rouge"],
                     )
@@ -530,28 +466,14 @@ def test(
         dev_best_translation_beam_size if do_translation else -1,
         dev_best_translation_alpha if do_translation else -1,
         dev_best_recognition_result["valid_scores"]["wer"] if do_recognition else -1,
-        dev_best_recognition_result["valid_scores"]["wer_scores"]["del_rate"]
-        if do_recognition
-        else -1,
-        dev_best_recognition_result["valid_scores"]["wer_scores"]["ins_rate"]
-        if do_recognition
-        else -1,
-        dev_best_recognition_result["valid_scores"]["wer_scores"]["sub_rate"]
-        if do_recognition
-        else -1,
+        dev_best_recognition_result["valid_scores"]["wer_scores"]["del_rate"] if do_recognition else -1,
+        dev_best_recognition_result["valid_scores"]["wer_scores"]["ins_rate"] if do_recognition else -1,
+        dev_best_recognition_result["valid_scores"]["wer_scores"]["sub_rate"] if do_recognition else -1,
         dev_best_translation_result["valid_scores"]["bleu"] if do_translation else -1,
-        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu1"]
-        if do_translation
-        else -1,
-        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu2"]
-        if do_translation
-        else -1,
-        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu3"]
-        if do_translation
-        else -1,
-        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu4"]
-        if do_translation
-        else -1,
+        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu1"] if do_translation else -1,
+        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu2"] if do_translation else -1,
+        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu3"] if do_translation else -1,
+        dev_best_translation_result["valid_scores"]["bleu_scores"]["bleu4"] if do_translation else -1,
         dev_best_translation_result["valid_scores"]["chrf"] if do_translation else -1,
         dev_best_translation_result["valid_scores"]["rouge"] if do_translation else -1,
     )
@@ -571,19 +493,13 @@ def test(
         do_recognition=do_recognition,
         recognition_loss_function=recognition_loss_function if do_recognition else None,
         recognition_loss_weight=1 if do_recognition else None,
-        recognition_beam_size=dev_best_recognition_beam_size
-        if do_recognition
-        else None,
+        recognition_beam_size=dev_best_recognition_beam_size if do_recognition else None,
         do_translation=do_translation,
         translation_loss_function=translation_loss_function if do_translation else None,
         translation_loss_weight=1 if do_translation else None,
-        translation_max_output_length=translation_max_output_length
-        if do_translation
-        else None,
+        translation_max_output_length=translation_max_output_length if do_translation else None,
         level=level if do_translation else None,
-        translation_beam_size=dev_best_translation_beam_size
-        if do_translation
-        else None,
+        translation_beam_size=dev_best_translation_beam_size if do_translation else None,
         translation_beam_alpha=dev_best_translation_alpha if do_translation else None,
         frame_subsampling_ratio=frame_subsampling_ratio,
     )
@@ -600,28 +516,14 @@ def test(
         dev_best_translation_beam_size if do_translation else -1,
         dev_best_translation_alpha if do_translation else -1,
         test_best_result["valid_scores"]["wer"] if do_recognition else -1,
-        test_best_result["valid_scores"]["wer_scores"]["del_rate"]
-        if do_recognition
-        else -1,
-        test_best_result["valid_scores"]["wer_scores"]["ins_rate"]
-        if do_recognition
-        else -1,
-        test_best_result["valid_scores"]["wer_scores"]["sub_rate"]
-        if do_recognition
-        else -1,
+        test_best_result["valid_scores"]["wer_scores"]["del_rate"] if do_recognition else -1,
+        test_best_result["valid_scores"]["wer_scores"]["ins_rate"] if do_recognition else -1,
+        test_best_result["valid_scores"]["wer_scores"]["sub_rate"] if do_recognition else -1,
         test_best_result["valid_scores"]["bleu"] if do_translation else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu1"]
-        if do_translation
-        else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu2"]
-        if do_translation
-        else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu3"]
-        if do_translation
-        else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu4"]
-        if do_translation
-        else -1,
+        test_best_result["valid_scores"]["bleu_scores"]["bleu1"] if do_translation else -1,
+        test_best_result["valid_scores"]["bleu_scores"]["bleu2"] if do_translation else -1,
+        test_best_result["valid_scores"]["bleu_scores"]["bleu3"] if do_translation else -1,
+        test_best_result["valid_scores"]["bleu_scores"]["bleu4"] if do_translation else -1,
         test_best_result["valid_scores"]["chrf"] if do_translation else -1,
         test_best_result["valid_scores"]["rouge"] if do_translation else -1,
     )
@@ -634,17 +536,13 @@ def test(
 
     if output_path is not None:
         if do_recognition:
-            dev_gls_output_path_set = "{}.BW_{:03d}.{}.gls".format(
-                output_path, dev_best_recognition_beam_size, "dev"
-            )
+            dev_gls_output_path_set = "{}.BW_{:03d}.{}.gls".format(output_path, dev_best_recognition_beam_size, "dev")
             _write_to_file(
                 dev_gls_output_path_set,
                 [s for s in dev_data.sequence],
                 dev_best_recognition_result["gls_hyp"],
             )
-            test_gls_output_path_set = "{}.BW_{:03d}.{}.gls".format(
-                output_path, dev_best_recognition_beam_size, "test"
-            )
+            test_gls_output_path_set = "{}.BW_{:03d}.{}.gls".format(output_path, dev_best_recognition_beam_size, "test")
             _write_to_file(
                 test_gls_output_path_set,
                 [s for s in test_data.sequence],
@@ -687,12 +585,8 @@ def test(
         with open(output_path + ".dev_results.pkl", "wb") as out:
             pickle.dump(
                 {
-                    "recognition_results": dev_recognition_results
-                    if do_recognition
-                    else None,
-                    "translation_results": dev_translation_results
-                    if do_translation
-                    else None,
+                    "recognition_results": dev_recognition_results if do_recognition else None,
+                    "translation_results": dev_translation_results if do_translation else None,
                 },
                 out,
             )

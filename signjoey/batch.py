@@ -62,14 +62,12 @@ class Batch:
 
         if random_frame_masking_ratio and is_train:
             tmp_sgn = torch.zeros_like(self.sgn)
-            num_mask_frames = (
-                (self.sgn_lengths * random_frame_masking_ratio).floor().long()
-            )
+            num_mask_frames = (self.sgn_lengths * random_frame_masking_ratio).floor().long()
             for idx, features in enumerate(self.sgn):
                 features = features.clone()
-                mask_frame_idx = np.random.permutation(
-                    int(self.sgn_lengths[idx].long().numpy())
-                )[: num_mask_frames[idx]]
+                mask_frame_idx = np.random.permutation(int(self.sgn_lengths[idx].long().numpy()))[
+                    : num_mask_frames[idx]
+                ]
                 features[mask_frame_idx, :] = 1e-8
                 tmp_sgn[idx] = features
             self.sgn = tmp_sgn

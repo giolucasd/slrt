@@ -79,11 +79,7 @@ class MultiHeadedAttention(nn.Module):
         # get context vector (select values with attention) and reshape
         # back to [B, M, D]
         context = torch.matmul(attention, v)
-        context = (
-            context.transpose(1, 2)
-            .contiguous()
-            .view(batch_size, -1, num_heads * self.head_size)
-        )
+        context = context.transpose(1, 2).contiguous().view(batch_size, -1, num_heads * self.head_size)
 
         output = self.output_layer(context)
 
@@ -138,15 +134,10 @@ class PositionalEncoding(nn.Module):
         :param dropout:
         """
         if size % 2 != 0:
-            raise ValueError(
-                "Cannot use sin/cos positional encoding with "
-                "odd dim (got dim={:d})".format(size)
-            )
+            raise ValueError("Cannot use sin/cos positional encoding with odd dim (got dim={:d})".format(size))
         pe = torch.zeros(max_len, size)
         position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(
-            (torch.arange(0, size, 2, dtype=torch.float) * -(math.log(10000.0) / size))
-        )
+        div_term = torch.exp((torch.arange(0, size, 2, dtype=torch.float) * -(math.log(10000.0) / size)))
         pe[:, 0::2] = torch.sin(position.float() * div_term)
         pe[:, 1::2] = torch.cos(position.float() * div_term)
         pe = pe.unsqueeze(0)  # shape: [1, size, max_len]
@@ -170,9 +161,7 @@ class TransformerEncoderLayer(nn.Module):
     a position-wise feed-forward layer.
     """
 
-    def __init__(
-        self, size: int = 0, ff_size: int = 0, num_heads: int = 0, dropout: float = 0.1
-    ):
+    def __init__(self, size: int = 0, ff_size: int = 0, num_heads: int = 0, dropout: float = 0.1):
         """
         A single Transformer layer.
         :param size:
@@ -184,9 +173,7 @@ class TransformerEncoderLayer(nn.Module):
 
         self.layer_norm = nn.LayerNorm(size, eps=1e-6)
         self.src_src_att = MultiHeadedAttention(num_heads, size, dropout=dropout)
-        self.feed_forward = PositionwiseFeedForward(
-            input_size=size, ff_size=ff_size, dropout=dropout
-        )
+        self.feed_forward = PositionwiseFeedForward(input_size=size, ff_size=ff_size, dropout=dropout)
         self.dropout = nn.Dropout(dropout)
         self.size = size
 
@@ -216,9 +203,7 @@ class TransformerDecoderLayer(nn.Module):
     Consists of self-attention, source-attention, and feed-forward.
     """
 
-    def __init__(
-        self, size: int = 0, ff_size: int = 0, num_heads: int = 0, dropout: float = 0.1
-    ):
+    def __init__(self, size: int = 0, ff_size: int = 0, num_heads: int = 0, dropout: float = 0.1):
         """
         Represents a single Transformer decoder layer.
 
@@ -235,9 +220,7 @@ class TransformerDecoderLayer(nn.Module):
         self.trg_trg_att = MultiHeadedAttention(num_heads, size, dropout=dropout)
         self.src_trg_att = MultiHeadedAttention(num_heads, size, dropout=dropout)
 
-        self.feed_forward = PositionwiseFeedForward(
-            input_size=size, ff_size=ff_size, dropout=dropout
-        )
+        self.feed_forward = PositionwiseFeedForward(input_size=size, ff_size=ff_size, dropout=dropout)
 
         self.x_layer_norm = nn.LayerNorm(size, eps=1e-6)
         self.dec_layer_norm = nn.LayerNorm(size, eps=1e-6)

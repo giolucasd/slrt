@@ -2,9 +2,10 @@
 """
 Data module
 """
+
 from torchtext import data
 from torchtext.data import Field, RawField
-from typing import List, Tuple
+from typing import Tuple
 import pickle
 import gzip
 import torch
@@ -23,12 +24,7 @@ class SignTranslationDataset(data.Dataset):
     def sort_key(ex):
         return data.interleave_keys(len(ex.sgn), len(ex.txt))
 
-    def __init__(
-        self,
-        path: str,
-        fields: Tuple[RawField, RawField, Field, Field, Field],
-        **kwargs
-    ):
+    def __init__(self, path: str, fields: Tuple[RawField, RawField, Field, Field, Field], **kwargs):
         """Create a SignTranslationDataset given paths and fields.
 
         Arguments:
@@ -61,9 +57,7 @@ class SignTranslationDataset(data.Dataset):
                     assert samples[seq_id]["signer"] == s["signer"]
                     assert samples[seq_id]["gloss"] == s["gloss"]
                     assert samples[seq_id]["text"] == s["text"]
-                    samples[seq_id]["sign"] = torch.cat(
-                        [samples[seq_id]["sign"], s["sign"]], axis=1
-                    )
+                    samples[seq_id]["sign"] = torch.cat([samples[seq_id]["sign"], s["sign"]], axis=1)
                 else:
                     samples[seq_id] = {
                         "name": s["name"],

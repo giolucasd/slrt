@@ -1,44 +1,41 @@
-#!/usr/bin/env python
 import torch
 
-torch.backends.cudnn.deterministic = True
-
 import argparse
-import numpy as np
 import os
+import queue
 import shutil
 import time
-import queue
+from typing import Dict, List
 
-from signjoey.model import build_model
-from signjoey.batch import Batch
-from signjoey.helpers import (
-    log_data_info,
-    load_config,
-    log_cfg,
-    load_checkpoint,
-    make_model_dir,
-    make_logger,
-    set_seed,
-    symlink_update,
-)
-from signjoey.model import SignModel
-from signjoey.prediction import validate_on_data
-from signjoey.loss import XentLoss
-from signjoey.data import load_data, make_data_iter
-from signjoey.builders import build_optimizer, build_scheduler, build_gradient_clipper
-from signjoey.prediction import test
-from signjoey.metrics import wer_single
-from signjoey.vocabulary import SIL_TOKEN
+import numpy as np
 from torch import Tensor
 from torch.utils.tensorboard import SummaryWriter
 from torchtext.data import Dataset
-from typing import List, Dict
+
+from signjoey.batch import Batch
+from signjoey.builders import build_gradient_clipper, build_optimizer, build_scheduler
+from signjoey.data import load_data, make_data_iter
+from signjoey.helpers import (
+    load_checkpoint,
+    load_config,
+    log_cfg,
+    log_data_info,
+    make_logger,
+    make_model_dir,
+    set_seed,
+    symlink_update,
+)
+from signjoey.loss import XentLoss
+from signjoey.metrics import wer_single
+from signjoey.model import SignModel, build_model
+from signjoey.prediction import test, validate_on_data
+from signjoey.vocabulary import SIL_TOKEN
+
+torch.backends.cudnn.deterministic = True
 
 
-# pylint: disable=too-many-instance-attributes
 class TrainManager:
-    """ Manages training loop, validations, learning rate scheduling
+    """Manages training loop, validations, learning rate scheduling
     and early stopping."""
 
     def __init__(self, model: SignModel, config: dict) -> None:
@@ -51,9 +48,7 @@ class TrainManager:
         train_config = config["training"]
 
         # files for logging and storing
-        self.model_dir = make_model_dir(
-            train_config["model_dir"], overwrite=train_config.get("overwrite", False)
-        )
+        self.model_dir = make_model_dir(train_config["model_dir"], overwrite=train_config.get("overwrite", False))
         self.logger = make_logger(model_dir=self.model_dir)
         self.logging_freq = train_config.get("logging_freq", 100)
         self.valid_report_file = "{}/validations.txt".format(self.model_dir)
@@ -73,12 +68,8 @@ class TrainManager:
         self.txt_bos_index = self.model.txt_bos_index
         self._log_parameters_list()
         # Check if we are doing only recognition or only translation or both
-        self.do_recognition = (
-            config["training"].get("recognition_loss_weight", 1.0) > 0.0
-        )
-        self.do_translation = (
-            config["training"].get("translation_loss_weight", 1.0) > 0.0
-        )
+        self.do_recognition = config["training"].get("recognition_loss_weight", 1.0) > 0.0
+        self.do_translation = config["training"].get("translation_loss_weight", 1.0) > 0.0
 
         # Get Recognition and Translation specific parameters
         if self.do_recognition:
@@ -90,9 +81,7 @@ class TrainManager:
         self.last_best_lr = train_config.get("learning_rate", -1)
         self.learning_rate_min = train_config.get("learning_rate_min", 1.0e-8)
         self.clip_grad_fun = build_gradient_clipper(config=train_config)
-        self.optimizer = build_optimizer(
-            config=train_config, parameters=model.parameters()
-        )
+        self.optimizer = build_optimizer(config=train_config, parameters=model.parameters())
         self.batch_multiplier = train_config.get("batch_multiplier", 1)
 
         # validation & early stopping
@@ -101,12 +90,8 @@ class TrainManager:
         self.ckpt_queue = queue.Queue(maxsize=train_config.get("keep_last_ckpts", 5))
         self.eval_metric = train_config.get("eval_metric", "bleu")
         if self.eval_metric not in ["bleu", "chrf", "wer", "rouge"]:
-            raise ValueError(
-                "Invalid setting for 'eval_metric': {}".format(self.eval_metric)
-            )
-        self.early_stopping_metric = train_config.get(
-            "early_stopping_metric", "eval_metric"
-        )
+            raise ValueError("Invalid setting for 'eval_metric': {}".format(self.eval_metric))
+        self.early_stopping_metric = train_config.get("early_stopping_metric", "eval_metric")
 
         # if we schedule after BLEU/chrf, we want to maximize it, else minimize
         # early_stopping_metric decides on how to find the early stopping point:
@@ -124,22 +109,12 @@ class TrainManager:
             else:  # eval metric that has to get minimized (not yet implemented)
                 self.minimize_metric = True
         else:
-            raise ValueError(
-                "Invalid setting for 'early_stopping_metric': {}".format(
-                    self.early_stopping_metric
-                )
-            )
+            raise ValueError("Invalid setting for 'early_stopping_metric': {}".format(self.early_stopping_metric))
 
         # data_augmentation parameters
-        self.frame_subsampling_ratio = config["data"].get(
-            "frame_subsampling_ratio", None
-        )
-        self.random_frame_subsampling = config["data"].get(
-            "random_frame_subsampling", None
-        )
-        self.random_frame_masking_ratio = config["data"].get(
-            "random_frame_masking_ratio", None
-        )
+        self.frame_subsampling_ratio = config["data"].get("frame_subsampling_ratio", None)
+        self.random_frame_subsampling = config["data"].get("random_frame_subsampling", None)
+        self.random_frame_masking_ratio = config["data"].get("random_frame_masking_ratio", None)
 
         # learning rate scheduling
         self.scheduler, self.scheduler_step_at = build_scheduler(
@@ -181,9 +156,7 @@ class TrainManager:
         self.best_all_ckpt_scores = {}
         # comparison function for scores
         self.is_best = (
-            lambda score: score < self.best_ckpt_score
-            if self.minimize_metric
-            else score > self.best_ckpt_score
+            lambda score: score < self.best_ckpt_score if self.minimize_metric else score > self.best_ckpt_score
         )
 
         # model parameters
@@ -208,36 +181,20 @@ class TrainManager:
         self.gls_silence_token = self.model.gls_vocab.stoi[SIL_TOKEN]
         assert self.gls_silence_token == 0
 
-        self.recognition_loss_function = torch.nn.CTCLoss(
-            blank=self.gls_silence_token, zero_infinity=True
-        )
+        self.recognition_loss_function = torch.nn.CTCLoss(blank=self.gls_silence_token, zero_infinity=True)
         self.recognition_loss_weight = train_config.get("recognition_loss_weight", 1.0)
-        self.eval_recognition_beam_size = train_config.get(
-            "eval_recognition_beam_size", 1
-        )
+        self.eval_recognition_beam_size = train_config.get("eval_recognition_beam_size", 1)
 
     def _get_translation_params(self, train_config) -> None:
         self.label_smoothing = train_config.get("label_smoothing", 0.0)
-        self.translation_loss_function = XentLoss(
-            pad_index=self.txt_pad_index, smoothing=self.label_smoothing
-        )
-        self.translation_normalization_mode = train_config.get(
-            "translation_normalization", "batch"
-        )
+        self.translation_loss_function = XentLoss(pad_index=self.txt_pad_index, smoothing=self.label_smoothing)
+        self.translation_normalization_mode = train_config.get("translation_normalization", "batch")
         if self.translation_normalization_mode not in ["batch", "tokens"]:
-            raise ValueError(
-                "Invalid normalization {}.".format(self.translation_normalization_mode)
-            )
+            raise ValueError("Invalid normalization {}.".format(self.translation_normalization_mode))
         self.translation_loss_weight = train_config.get("translation_loss_weight", 1.0)
-        self.eval_translation_beam_size = train_config.get(
-            "eval_translation_beam_size", 1
-        )
-        self.eval_translation_beam_alpha = train_config.get(
-            "eval_translation_beam_alpha", -1
-        )
-        self.translation_max_output_length = train_config.get(
-            "translation_max_output_length", None
-        )
+        self.eval_translation_beam_size = train_config.get("eval_translation_beam_size", 1)
+        self.eval_translation_beam_alpha = train_config.get("eval_translation_beam_alpha", -1)
+        self.translation_max_output_length = train_config.get("translation_max_output_length", None)
 
     def _save_checkpoint(self) -> None:
         """
@@ -260,9 +217,7 @@ class TrainManager:
             "best_ckpt_iteration": self.best_ckpt_iteration,
             "model_state": self.model.state_dict(),
             "optimizer_state": self.optimizer.state_dict(),
-            "scheduler_state": self.scheduler.state_dict()
-            if self.scheduler is not None
-            else None,
+            "scheduler_state": self.scheduler.state_dict() if self.scheduler is not None else None,
         }
         torch.save(state, model_path)
         if self.ckpt_queue.full():
@@ -271,16 +226,14 @@ class TrainManager:
                 os.remove(to_delete)
             except FileNotFoundError:
                 self.logger.warning(
-                    "Wanted to delete old checkpoint %s but " "file does not exist.",
+                    "Wanted to delete old checkpoint %s but file does not exist.",
                     to_delete,
                 )
 
         self.ckpt_queue.put(model_path)
 
         # create/modify symbolic link for best checkpoint
-        symlink_update(
-            "{}.ckpt".format(self.steps), "{}/best.ckpt".format(self.model_dir)
-        )
+        symlink_update("{}.ckpt".format(self.steps), "{}/best.ckpt".format(self.model_dir))
 
     def init_from_checkpoint(
         self,
@@ -315,10 +268,7 @@ class TrainManager:
             self.logger.info("Reset optimizer.")
 
         if not reset_scheduler:
-            if (
-                model_checkpoint["scheduler_state"] is not None
-                and self.scheduler is not None
-            ):
+            if model_checkpoint["scheduler_state"] is not None and self.scheduler is not None:
                 self.scheduler.load_state_dict(model_checkpoint["scheduler_state"])
         else:
             self.logger.info("Reset scheduler.")
@@ -392,30 +342,20 @@ class TrainManager:
                 # memory-6794e10db672
                 update = count == 0
 
-                recognition_loss, translation_loss = self._train_batch(
-                    batch, update=update
-                )
+                recognition_loss, translation_loss = self._train_batch(batch, update=update)
 
                 if self.do_recognition:
-                    self.tb_writer.add_scalar(
-                        "train/train_recognition_loss", recognition_loss, self.steps
-                    )
+                    self.tb_writer.add_scalar("train/train_recognition_loss", recognition_loss, self.steps)
                     epoch_recognition_loss += recognition_loss.detach().cpu().numpy()
 
                 if self.do_translation:
-                    self.tb_writer.add_scalar(
-                        "train/train_translation_loss", translation_loss, self.steps
-                    )
+                    self.tb_writer.add_scalar("train/train_translation_loss", translation_loss, self.steps)
                     epoch_translation_loss += translation_loss.detach().cpu().numpy()
 
                 count = self.batch_multiplier if update else count
                 count -= 1
 
-                if (
-                    self.scheduler is not None
-                    and self.scheduler_step_at == "step"
-                    and update
-                ):
+                if self.scheduler is not None and self.scheduler_step_at == "step" and update:
                     self.scheduler.step()
 
                 # log learning progress
@@ -423,31 +363,20 @@ class TrainManager:
                     elapsed = time.time() - start - total_valid_duration
 
                     log_out = "[Epoch: {:03d} Step: {:08d}] ".format(
-                        epoch_no + 1, self.steps,
+                        epoch_no + 1,
+                        self.steps,
                     )
 
                     if self.do_recognition:
-                        elapsed_gls_tokens = (
-                            self.total_gls_tokens - processed_gls_tokens
-                        )
+                        elapsed_gls_tokens = self.total_gls_tokens - processed_gls_tokens
                         processed_gls_tokens = self.total_gls_tokens
-                        log_out += "Batch Recognition Loss: {:10.6f} => ".format(
-                            recognition_loss
-                        )
-                        log_out += "Gls Tokens per Sec: {:8.0f} || ".format(
-                            elapsed_gls_tokens / elapsed
-                        )
+                        log_out += "Batch Recognition Loss: {:10.6f} => ".format(recognition_loss)
+                        log_out += "Gls Tokens per Sec: {:8.0f} || ".format(elapsed_gls_tokens / elapsed)
                     if self.do_translation:
-                        elapsed_txt_tokens = (
-                            self.total_txt_tokens - processed_txt_tokens
-                        )
+                        elapsed_txt_tokens = self.total_txt_tokens - processed_txt_tokens
                         processed_txt_tokens = self.total_txt_tokens
-                        log_out += "Batch Translation Loss: {:10.6f} => ".format(
-                            translation_loss
-                        )
-                        log_out += "Txt Tokens per Sec: {:8.0f} || ".format(
-                            elapsed_txt_tokens / elapsed
-                        )
+                        log_out += "Batch Translation Loss: {:10.6f} => ".format(translation_loss)
+                        log_out += "Txt Tokens per Sec: {:8.0f} || ".format(elapsed_txt_tokens / elapsed)
                     log_out += "Lr: {:.6f}".format(self.optimizer.param_groups[0]["lr"])
                     self.logger.info(log_out)
                     start = time.time()
@@ -471,33 +400,19 @@ class TrainManager:
                         txt_pad_index=self.txt_pad_index,
                         # Recognition Parameters
                         do_recognition=self.do_recognition,
-                        recognition_loss_function=self.recognition_loss_function
-                        if self.do_recognition
-                        else None,
-                        recognition_loss_weight=self.recognition_loss_weight
-                        if self.do_recognition
-                        else None,
-                        recognition_beam_size=self.eval_recognition_beam_size
-                        if self.do_recognition
-                        else None,
+                        recognition_loss_function=self.recognition_loss_function if self.do_recognition else None,
+                        recognition_loss_weight=self.recognition_loss_weight if self.do_recognition else None,
+                        recognition_beam_size=self.eval_recognition_beam_size if self.do_recognition else None,
                         # Translation Parameters
                         do_translation=self.do_translation,
-                        translation_loss_function=self.translation_loss_function
-                        if self.do_translation
-                        else None,
+                        translation_loss_function=self.translation_loss_function if self.do_translation else None,
                         translation_max_output_length=self.translation_max_output_length
                         if self.do_translation
                         else None,
                         level=self.level if self.do_translation else None,
-                        translation_loss_weight=self.translation_loss_weight
-                        if self.do_translation
-                        else None,
-                        translation_beam_size=self.eval_translation_beam_size
-                        if self.do_translation
-                        else None,
-                        translation_beam_alpha=self.eval_translation_beam_alpha
-                        if self.do_translation
-                        else None,
+                        translation_loss_weight=self.translation_loss_weight if self.do_translation else None,
+                        translation_beam_size=self.eval_translation_beam_size if self.do_translation else None,
+                        translation_beam_alpha=self.eval_translation_beam_alpha if self.do_translation else None,
                         frame_subsampling_ratio=self.frame_subsampling_ratio,
                     )
                     self.model.train()
@@ -509,9 +424,7 @@ class TrainManager:
                             val_res["valid_recognition_loss"],
                             self.steps,
                         )
-                        self.tb_writer.add_scalar(
-                            "valid/wer", val_res["valid_scores"]["wer"], self.steps
-                        )
+                        self.tb_writer.add_scalar("valid/wer", val_res["valid_scores"]["wer"], self.steps)
                         self.tb_writer.add_scalars(
                             "valid/wer_scores",
                             val_res["valid_scores"]["wer_scores"],
@@ -524,20 +437,12 @@ class TrainManager:
                             val_res["valid_translation_loss"],
                             self.steps,
                         )
-                        self.tb_writer.add_scalar(
-                            "valid/valid_ppl", val_res["valid_ppl"], self.steps
-                        )
+                        self.tb_writer.add_scalar("valid/valid_ppl", val_res["valid_ppl"], self.steps)
 
                         # Log Scores
-                        self.tb_writer.add_scalar(
-                            "valid/chrf", val_res["valid_scores"]["chrf"], self.steps
-                        )
-                        self.tb_writer.add_scalar(
-                            "valid/rouge", val_res["valid_scores"]["rouge"], self.steps
-                        )
-                        self.tb_writer.add_scalar(
-                            "valid/bleu", val_res["valid_scores"]["bleu"], self.steps
-                        )
+                        self.tb_writer.add_scalar("valid/chrf", val_res["valid_scores"]["chrf"], self.steps)
+                        self.tb_writer.add_scalar("valid/rouge", val_res["valid_scores"]["rouge"], self.steps)
+                        self.tb_writer.add_scalar("valid/bleu", val_res["valid_scores"]["bleu"], self.steps)
                         self.tb_writer.add_scalars(
                             "valid/bleu_scores",
                             val_res["valid_scores"]["bleu_scores"],
@@ -570,10 +475,7 @@ class TrainManager:
                             new_best = True
                             self._save_checkpoint()
 
-                    if (
-                        self.scheduler is not None
-                        and self.scheduler_step_at == "validation"
-                    ):
+                    if self.scheduler is not None and self.scheduler_step_at == "validation":
                         prev_lr = self.scheduler.optimizer.param_groups[0]["lr"]
                         self.scheduler.step(ckpt_score)
                         now_lr = self.scheduler.optimizer.param_groups[0]["lr"]
@@ -585,12 +487,8 @@ class TrainManager:
                     # append to validation report
                     self._add_report(
                         valid_scores=val_res["valid_scores"],
-                        valid_recognition_loss=val_res["valid_recognition_loss"]
-                        if self.do_recognition
-                        else None,
-                        valid_translation_loss=val_res["valid_translation_loss"]
-                        if self.do_translation
-                        else None,
+                        valid_recognition_loss=val_res["valid_recognition_loss"] if self.do_recognition else None,
+                        valid_translation_loss=val_res["valid_translation_loss"] if self.do_translation else None,
                         valid_ppl=val_res["valid_ppl"] if self.do_translation else None,
                         eval_metric=self.eval_metric,
                         new_best=new_best,
@@ -616,39 +514,21 @@ class TrainManager:
                         self.eval_recognition_beam_size if self.do_recognition else -1,
                         self.eval_translation_beam_size if self.do_translation else -1,
                         self.eval_translation_beam_alpha if self.do_translation else -1,
-                        val_res["valid_recognition_loss"]
-                        if self.do_recognition
-                        else -1,
-                        val_res["valid_translation_loss"]
-                        if self.do_translation
-                        else -1,
+                        val_res["valid_recognition_loss"] if self.do_recognition else -1,
+                        val_res["valid_translation_loss"] if self.do_translation else -1,
                         val_res["valid_ppl"] if self.do_translation else -1,
                         self.eval_metric.upper(),
                         # WER
                         val_res["valid_scores"]["wer"] if self.do_recognition else -1,
-                        val_res["valid_scores"]["wer_scores"]["del_rate"]
-                        if self.do_recognition
-                        else -1,
-                        val_res["valid_scores"]["wer_scores"]["ins_rate"]
-                        if self.do_recognition
-                        else -1,
-                        val_res["valid_scores"]["wer_scores"]["sub_rate"]
-                        if self.do_recognition
-                        else -1,
+                        val_res["valid_scores"]["wer_scores"]["del_rate"] if self.do_recognition else -1,
+                        val_res["valid_scores"]["wer_scores"]["ins_rate"] if self.do_recognition else -1,
+                        val_res["valid_scores"]["wer_scores"]["sub_rate"] if self.do_recognition else -1,
                         # BLEU
                         val_res["valid_scores"]["bleu"] if self.do_translation else -1,
-                        val_res["valid_scores"]["bleu_scores"]["bleu1"]
-                        if self.do_translation
-                        else -1,
-                        val_res["valid_scores"]["bleu_scores"]["bleu2"]
-                        if self.do_translation
-                        else -1,
-                        val_res["valid_scores"]["bleu_scores"]["bleu3"]
-                        if self.do_translation
-                        else -1,
-                        val_res["valid_scores"]["bleu_scores"]["bleu4"]
-                        if self.do_translation
-                        else -1,
+                        val_res["valid_scores"]["bleu_scores"]["bleu1"] if self.do_translation else -1,
+                        val_res["valid_scores"]["bleu_scores"]["bleu2"] if self.do_translation else -1,
+                        val_res["valid_scores"]["bleu_scores"]["bleu3"] if self.do_translation else -1,
+                        val_res["valid_scores"]["bleu_scores"]["bleu4"] if self.do_translation else -1,
                         # Other
                         val_res["valid_scores"]["chrf"] if self.do_translation else -1,
                         val_res["valid_scores"]["rouge"] if self.do_translation else -1,
@@ -656,37 +536,21 @@ class TrainManager:
 
                     self._log_examples(
                         sequences=[s for s in valid_data.sequence],
-                        gls_references=val_res["gls_ref"]
-                        if self.do_recognition
-                        else None,
-                        gls_hypotheses=val_res["gls_hyp"]
-                        if self.do_recognition
-                        else None,
-                        txt_references=val_res["txt_ref"]
-                        if self.do_translation
-                        else None,
-                        txt_hypotheses=val_res["txt_hyp"]
-                        if self.do_translation
-                        else None,
+                        gls_references=val_res["gls_ref"] if self.do_recognition else None,
+                        gls_hypotheses=val_res["gls_hyp"] if self.do_recognition else None,
+                        txt_references=val_res["txt_ref"] if self.do_translation else None,
+                        txt_hypotheses=val_res["txt_hyp"] if self.do_translation else None,
                     )
 
                     valid_seq = [s for s in valid_data.sequence]
                     # store validation set outputs and references
                     if self.do_recognition:
-                        self._store_outputs(
-                            "dev.hyp.gls", valid_seq, val_res["gls_hyp"], "gls"
-                        )
-                        self._store_outputs(
-                            "references.dev.gls", valid_seq, val_res["gls_ref"]
-                        )
+                        self._store_outputs("dev.hyp.gls", valid_seq, val_res["gls_hyp"], "gls")
+                        self._store_outputs("references.dev.gls", valid_seq, val_res["gls_ref"])
 
                     if self.do_translation:
-                        self._store_outputs(
-                            "dev.hyp.txt", valid_seq, val_res["txt_hyp"], "txt"
-                        )
-                        self._store_outputs(
-                            "references.dev.txt", valid_seq, val_res["txt_ref"]
-                        )
+                        self._store_outputs("dev.hyp.txt", valid_seq, val_res["txt_hyp"], "txt")
+                        self._store_outputs("references.dev.txt", valid_seq, val_res["txt_ref"])
 
                 if self.stop:
                     break
@@ -697,8 +561,7 @@ class TrainManager:
                     and self.last_best_lr != prev_lr
                 ):
                     self.logger.info(
-                        "Training ended since there were no improvements in"
-                        "the last learning rate step: %f",
+                        "Training ended since there were no improvements inthe last learning rate step: %f",
                         prev_lr,
                     )
                 else:
@@ -709,8 +572,7 @@ class TrainManager:
                 break
 
             self.logger.info(
-                "Epoch %3d: Total Training Recognition Loss %.2f "
-                " Total Training Translation Loss %.2f ",
+                "Epoch %3d: Total Training Recognition Loss %.2f  Total Training Translation Loss %.2f ",
                 epoch_no + 1,
                 epoch_recognition_loss if self.do_recognition else -1,
                 epoch_translation_loss if self.do_translation else -1,
@@ -738,18 +600,10 @@ class TrainManager:
 
         recognition_loss, translation_loss = self.model.get_loss_for_batch(
             batch=batch,
-            recognition_loss_function=self.recognition_loss_function
-            if self.do_recognition
-            else None,
-            translation_loss_function=self.translation_loss_function
-            if self.do_translation
-            else None,
-            recognition_loss_weight=self.recognition_loss_weight
-            if self.do_recognition
-            else None,
-            translation_loss_weight=self.translation_loss_weight
-            if self.do_translation
-            else None,
+            recognition_loss_function=self.recognition_loss_function if self.do_recognition else None,
+            translation_loss_function=self.translation_loss_function if self.do_translation else None,
+            recognition_loss_weight=self.recognition_loss_weight if self.do_recognition else None,
+            translation_loss_weight=self.translation_loss_weight if self.do_translation else None,
         )
 
         # normalize translation loss
@@ -762,9 +616,7 @@ class TrainManager:
                 raise NotImplementedError("Only normalize by 'batch' or 'tokens'")
 
             # division needed since loss.backward sums the gradients until updated
-            normalized_translation_loss = translation_loss / (
-                txt_normalization_factor * self.batch_multiplier
-            )
+            normalized_translation_loss = translation_loss / (txt_normalization_factor * self.batch_multiplier)
         else:
             normalized_translation_loss = 0
 
@@ -849,15 +701,9 @@ class TrainManager:
                     eval_metric,
                     # WER
                     valid_scores["wer"] if self.do_recognition else -1,
-                    valid_scores["wer_scores"]["del_rate"]
-                    if self.do_recognition
-                    else -1,
-                    valid_scores["wer_scores"]["ins_rate"]
-                    if self.do_recognition
-                    else -1,
-                    valid_scores["wer_scores"]["sub_rate"]
-                    if self.do_recognition
-                    else -1,
+                    valid_scores["wer_scores"]["del_rate"] if self.do_recognition else -1,
+                    valid_scores["wer_scores"]["ins_rate"] if self.do_recognition else -1,
+                    valid_scores["wer_scores"]["sub_rate"] if self.do_recognition else -1,
                     # BLEU
                     valid_scores["bleu"] if self.do_translation else -1,
                     valid_scores["bleu_scores"]["bleu1"] if self.do_translation else -1,
@@ -879,9 +725,7 @@ class TrainManager:
         model_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         n_params = sum([np.prod(p.size()) for p in model_parameters])
         self.logger.info("Total params: %d", n_params)
-        trainable_params = [
-            n for (n, p) in self.model.named_parameters() if p.requires_grad
-        ]
+        trainable_params = [n for (n, p) in self.model.named_parameters() if p.requires_grad]
         self.logger.info("Trainable parameters: %s", sorted(trainable_params))
         assert trainable_params
 
@@ -917,33 +761,19 @@ class TrainManager:
             self.logger.info("Logging Sequence: %s", sequences[ri])
             if self.do_recognition:
                 gls_res = wer_single(r=gls_references[ri], h=gls_hypotheses[ri])
-                self.logger.info(
-                    "\tGloss Reference :\t%s", gls_res["alignment_out"]["align_ref"]
-                )
-                self.logger.info(
-                    "\tGloss Hypothesis:\t%s", gls_res["alignment_out"]["align_hyp"]
-                )
-                self.logger.info(
-                    "\tGloss Alignment :\t%s", gls_res["alignment_out"]["alignment"]
-                )
+                self.logger.info("\tGloss Reference :\t%s", gls_res["alignment_out"]["align_ref"])
+                self.logger.info("\tGloss Hypothesis:\t%s", gls_res["alignment_out"]["align_hyp"])
+                self.logger.info("\tGloss Alignment :\t%s", gls_res["alignment_out"]["alignment"])
             if self.do_recognition and self.do_translation:
                 self.logger.info("\t" + "-" * 116)
             if self.do_translation:
                 txt_res = wer_single(r=txt_references[ri], h=txt_hypotheses[ri])
-                self.logger.info(
-                    "\tText Reference  :\t%s", txt_res["alignment_out"]["align_ref"]
-                )
-                self.logger.info(
-                    "\tText Hypothesis :\t%s", txt_res["alignment_out"]["align_hyp"]
-                )
-                self.logger.info(
-                    "\tText Alignment  :\t%s", txt_res["alignment_out"]["alignment"]
-                )
+                self.logger.info("\tText Reference  :\t%s", txt_res["alignment_out"]["align_ref"])
+                self.logger.info("\tText Hypothesis :\t%s", txt_res["alignment_out"]["align_hyp"])
+                self.logger.info("\tText Alignment  :\t%s", txt_res["alignment_out"]["alignment"])
             self.logger.info("=" * 120)
 
-    def _store_outputs(
-        self, tag: str, sequence_ids: List[str], hypotheses: List[str], sub_folder=None
-    ) -> None:
+    def _store_outputs(self, tag: str, sequence_ids: List[str], hypotheses: List[str], sub_folder=None) -> None:
         """
         Write current validation outputs to file in `self.model_dir.`
 
@@ -974,9 +804,7 @@ def train(cfg_file: str) -> None:
     # set the random seed
     set_seed(seed=cfg["training"].get("random_seed", 42))
 
-    train_data, dev_data, test_data, gls_vocab, txt_vocab = load_data(
-        data_cfg=cfg["data"]
-    )
+    train_data, dev_data, test_data, gls_vocab, txt_vocab = load_data(data_cfg=cfg["data"])
 
     # build model and load parameters into it
     do_recognition = cfg["training"].get("recognition_loss_weight", 1.0) > 0.0
@@ -1041,9 +869,7 @@ if __name__ == "__main__":
         type=str,
         help="Training configuration file (yaml).",
     )
-    parser.add_argument(
-        "--gpu_id", type=str, default="0", help="gpu to run your job on"
-    )
+    parser.add_argument("--gpu_id", type=str, default="0", help="gpu to run your job on")
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
     train(cfg_file=args.config)

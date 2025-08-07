@@ -20,9 +20,7 @@ def chrf(references, hypotheses):
     :param references: list of references (strings)
     :return:
     """
-    return (
-        sacrebleu.corpus_chrf(hypotheses=hypotheses, references=references).score * 100
-    )
+    return sacrebleu.corpus_chrf(hypotheses=hypotheses, references=references).score * 100
 
 
 def bleu(references, hypotheses):
@@ -33,9 +31,7 @@ def bleu(references, hypotheses):
     :param references: list of references (strings)
     :return:
     """
-    bleu_scores = sacrebleu.raw_corpus_bleu(
-        sys_stream=hypotheses, ref_streams=[references]
-    ).scores
+    bleu_scores = sacrebleu.raw_corpus_bleu(sys_stream=hypotheses, ref_streams=[references]).scores
     scores = {}
     for n in range(len(bleu_scores)):
         scores["bleu" + str(n + 1)] = bleu_scores[n]
@@ -75,9 +71,7 @@ def sequence_accuracy(references, hypotheses):
     :return:
     """
     assert len(hypotheses) == len(references)
-    correct_sequences = sum(
-        [1 for (hyp, ref) in zip(hypotheses, references) if hyp == ref]
-    )
+    correct_sequences = sum([1 for (hyp, ref) in zip(hypotheses, references) if hyp == ref])
     return (correct_sequences / len(hypotheses)) * 100 if hypotheses else 0.0
 
 
@@ -149,9 +143,7 @@ def edit_distance(r, h):
         r -> the list of words produced by splitting reference sentence.
         h -> the list of words produced by splitting hypothesis sentence.
     """
-    d = np.zeros((len(r) + 1) * (len(h) + 1), dtype=np.uint8).reshape(
-        (len(r) + 1, len(h) + 1)
-    )
+    d = np.zeros((len(r) + 1) * (len(h) + 1), dtype=np.uint8).reshape((len(r) + 1, len(h) + 1))
     for i in range(len(r) + 1):
         for j in range(len(h) + 1):
             if i == 0:

@@ -62,18 +62,11 @@ class XentLoss(nn.Module):
         :return:
         """
         if self.smoothing > 0:
-            targets = self._smooth_targets(
-                targets=targets.contiguous().view(-1), vocab_size=log_probs.size(-1)
-            )
+            targets = self._smooth_targets(targets=targets.contiguous().view(-1), vocab_size=log_probs.size(-1))
             # targets: distributions with batch*seq_len x vocab_size
-            assert (
-                log_probs.contiguous().view(-1, log_probs.size(-1)).shape
-                == targets.shape
-            )
+            assert log_probs.contiguous().view(-1, log_probs.size(-1)).shape == targets.shape
         else:
             # targets: indices with batch*seq_len
             targets = targets.contiguous().view(-1)
-        loss = self.criterion(
-            log_probs.contiguous().view(-1, log_probs.size(-1)), targets
-        )
+        loss = self.criterion(log_probs.contiguous().view(-1, log_probs.size(-1)), targets)
         return loss

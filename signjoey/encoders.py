@@ -39,7 +39,7 @@ class RecurrentEncoder(Encoder):
         emb_dropout: float = 0.0,
         bidirectional: bool = True,
         freeze: bool = False,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Create a new recurrent encoder.
@@ -78,9 +78,7 @@ class RecurrentEncoder(Encoder):
             freeze_params(self)
 
     # pylint: disable=invalid-name, unused-argument
-    def _check_shapes_input_forward(
-        self, embed_src: Tensor, src_length: Tensor, mask: Tensor
-    ) -> None:
+    def _check_shapes_input_forward(self, embed_src: Tensor, src_length: Tensor, mask: Tensor) -> None:
         """
         Make sure the shape of the inputs to `self.forward` are correct.
         Same input semantics as `self.forward`.
@@ -95,9 +93,7 @@ class RecurrentEncoder(Encoder):
         assert len(src_length.shape) == 1
 
     # pylint: disable=arguments-differ
-    def forward(
-        self, embed_src: Tensor, src_length: Tensor, mask: Tensor
-    ) -> (Tensor, Tensor):
+    def forward(self, embed_src: Tensor, src_length: Tensor, mask: Tensor) -> (Tensor, Tensor):
         """
         Applies a bidirectional RNN to sequence of embeddings x.
         The input mini-batch x needs to be sorted by src length.
@@ -115,9 +111,7 @@ class RecurrentEncoder(Encoder):
             - hidden_concat: last hidden state with
                 shape (batch_size, directions*hidden)
         """
-        self._check_shapes_input_forward(
-            embed_src=embed_src, src_length=src_length, mask=mask
-        )
+        self._check_shapes_input_forward(embed_src=embed_src, src_length=src_length, mask=mask)
 
         # apply dropout to the rnn input
         embed_src = self.emb_dropout(embed_src)
@@ -172,7 +166,7 @@ class TransformerEncoder(Encoder):
         dropout: float = 0.1,
         emb_dropout: float = 0.1,
         freeze: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """
         Initializes the Transformer.
@@ -211,9 +205,7 @@ class TransformerEncoder(Encoder):
             freeze_params(self)
 
     # pylint: disable=arguments-differ
-    def forward(
-        self, embed_src: Tensor, src_length: Tensor, mask: Tensor
-    ) -> (Tensor, Tensor):
+    def forward(self, embed_src: Tensor, src_length: Tensor, mask: Tensor) -> (Tensor, Tensor):
         """
         Pass the input (and mask) through each layer in turn.
         Applies a Transformer encoder to sequence of embeddings x.

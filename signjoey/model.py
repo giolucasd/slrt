@@ -1,7 +1,4 @@
-# coding: utf-8
 import tensorflow as tf
-
-tf.config.set_visible_devices([], "GPU")
 
 import numpy as np
 import torch.nn as nn
@@ -24,6 +21,8 @@ from signjoey.batch import Batch
 from signjoey.helpers import freeze_params
 from torch import Tensor
 from typing import Union
+
+tf.config.set_visible_devices([], "GPU")
 
 
 class SignModel(nn.Module):
@@ -94,9 +93,7 @@ class SignModel(nn.Module):
         :param txt_mask: target mask
         :return: decoder outputs
         """
-        encoder_output, encoder_hidden = self.encode(
-            sgn=sgn, sgn_mask=sgn_mask, sgn_length=sgn_lengths
-        )
+        encoder_output, encoder_hidden = self.encode(sgn=sgn, sgn_mask=sgn_mask, sgn_length=sgn_lengths)
 
         if self.do_recognition:
             # Gloss Recognition Part
@@ -124,9 +121,7 @@ class SignModel(nn.Module):
 
         return decoder_outputs, gloss_probabilities
 
-    def encode(
-        self, sgn: Tensor, sgn_mask: Tensor, sgn_length: Tensor
-    ) -> (Tensor, Tensor):
+    def encode(self, sgn: Tensor, sgn_mask: Tensor, sgn_length: Tensor) -> (Tensor, Tensor):
         """
         Encodes the source sentence.
 
@@ -223,10 +218,7 @@ class SignModel(nn.Module):
             word_outputs, _, _, _ = decoder_outputs
             # Calculate Translation Loss
             txt_log_probs = F.log_softmax(word_outputs, dim=-1)
-            translation_loss = (
-                translation_loss_function(txt_log_probs, batch.txt)
-                * translation_loss_weight
-            )
+            translation_loss = translation_loss_function(txt_log_probs, batch.txt) * translation_loss_weight
         else:
             translation_loss = None
 
@@ -282,15 +274,11 @@ class SignModel(nn.Module):
             ctc_decode = ctc_decode[0]
             # Create a decoded gloss list for each sample
             tmp_gloss_sequences = [[] for i in range(gloss_scores.shape[0])]
-            for (value_idx, dense_idx) in enumerate(ctc_decode.indices):
-                tmp_gloss_sequences[dense_idx[0]].append(
-                    ctc_decode.values[value_idx].numpy() + 1
-                )
+            for value_idx, dense_idx in enumerate(ctc_decode.indices):
+                tmp_gloss_sequences[dense_idx[0]].append(ctc_decode.values[value_idx].numpy() + 1)
             decoded_gloss_sequences = []
             for seq_idx in range(0, len(tmp_gloss_sequences)):
-                decoded_gloss_sequences.append(
-                    [x[0] for x in groupby(tmp_gloss_sequences[seq_idx])]
-                )
+                decoded_gloss_sequences.append([x[0] for x in groupby(tmp_gloss_sequences[seq_idx])])
         else:
             decoded_gloss_sequences = None
 
@@ -333,19 +321,12 @@ class SignModel(nn.Module):
 
         :return: string representation
         """
-        return (
-            "%s(\n"
-            "\tencoder=%s,\n"
-            "\tdecoder=%s,\n"
-            "\tsgn_embed=%s,\n"
-            "\ttxt_embed=%s)"
-            % (
-                self.__class__.__name__,
-                self.encoder,
-                self.decoder,
-                self.sgn_embed,
-                self.txt_embed,
-            )
+        return "%s(\n\tencoder=%s,\n\tdecoder=%s,\n\tsgn_embed=%s,\n\ttxt_embed=%s)" % (
+            self.__class__.__name__,
+            self.encoder,
+            self.decoder,
+            self.sgn_embed,
+            self.txt_embed,
         )
 
 
@@ -381,10 +362,9 @@ def build_model(
     enc_dropout = cfg["encoder"].get("dropout", 0.0)
     enc_emb_dropout = cfg["encoder"]["embeddings"].get("dropout", enc_dropout)
     if cfg["encoder"].get("type", "recurrent") == "transformer":
-        assert (
-            cfg["encoder"]["embeddings"]["embedding_dim"]
-            == cfg["encoder"]["hidden_size"]
-        ), "for transformer, emb_size must be hidden_size"
+        assert cfg["encoder"]["embeddings"]["embedding_dim"] == cfg["encoder"]["hidden_size"], (
+            "for transformer, emb_size must be hidden_size"
+        )
 
         encoder = TransformerEncoder(
             **cfg["encoder"],

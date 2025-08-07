@@ -2,6 +2,7 @@
 """
 Data module
 """
+
 import os
 import sys
 import random
@@ -9,7 +10,6 @@ import random
 import torch
 from torchtext import data
 from torchtext.data import Dataset, Iterator
-import socket
 from signjoey.dataset import SignTranslationDataset
 from signjoey.vocabulary import (
     build_vocab,
@@ -116,8 +116,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     train_data = SignTranslationDataset(
         path=train_paths,
         fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
-        filter_pred=lambda x: len(vars(x)["sgn"]) <= max_sent_length
-        and len(vars(x)["txt"]) <= max_sent_length,
+        filter_pred=lambda x: len(vars(x)["sgn"]) <= max_sent_length and len(vars(x)["txt"]) <= max_sent_length,
     )
 
     gls_max_size = data_cfg.get("gls_voc_limit", sys.maxsize)
@@ -146,9 +145,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     if random_train_subset > -1:
         # select this many training examples randomly and discard the rest
         keep_ratio = random_train_subset / len(train_data)
-        keep, _ = train_data.split(
-            split_ratio=[keep_ratio, 1 - keep_ratio], random_state=random.getstate()
-        )
+        keep, _ = train_data.split(split_ratio=[keep_ratio, 1 - keep_ratio], random_state=random.getstate())
         train_data = keep
 
     dev_data = SignTranslationDataset(
@@ -159,9 +156,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     if random_dev_subset > -1:
         # select this many development examples randomly and discard the rest
         keep_ratio = random_dev_subset / len(dev_data)
-        keep, _ = dev_data.split(
-            split_ratio=[keep_ratio, 1 - keep_ratio], random_state=random.getstate()
-        )
+        keep, _ = dev_data.split(split_ratio=[keep_ratio, 1 - keep_ratio], random_state=random.getstate())
         dev_data = keep
 
     # check if target exists

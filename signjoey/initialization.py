@@ -32,9 +32,8 @@ def lstm_forget_gate_init_(cell: nn.RNNBase, value: float = 1.0) -> None:
     """
     with torch.no_grad():
         for _, _, ih_b, hh_b in cell.all_weights:
-            l = len(ih_b)
-            ih_b.data[l // 4 : l // 2].fill_(value)
-            hh_b.data[l // 4 : l // 2].fill_(value)
+            ih_b.data[len(ih_b) // 4 : len(ih_b) // 2].fill_(value)
+            hh_b.data[len(ih_b) // 4 : len(ih_b) // 2].fill_(value)
 
 
 def xavier_uniform_n_(w: Tensor, gain: float = 1.0, n: int = 4) -> None:
@@ -127,7 +126,6 @@ def initialize_model(model: nn.Module, cfg: dict, txt_padding_idx: int) -> None:
 
     with torch.no_grad():
         for name, p in model.named_parameters():
-
             if "txt_embed" in name:
                 if "lut" in name:
                     embed_init_fn_(p)
@@ -136,7 +134,6 @@ def initialize_model(model: nn.Module, cfg: dict, txt_padding_idx: int) -> None:
                 bias_init_fn_(p)
 
             elif len(p.size()) > 1:
-
                 # RNNs combine multiple matrices is one, which messes up
                 # xavier initialization
                 if init == "xavier" and "rnn" in name:
@@ -158,7 +155,6 @@ def initialize_model(model: nn.Module, cfg: dict, txt_padding_idx: int) -> None:
 
         # encoder rnn orthogonal initialization & LSTM forget gate
         if hasattr(model.encoder, "rnn"):
-
             if orthogonal:
                 orthogonal_rnn_init_(model.encoder.rnn)
 
@@ -167,7 +163,6 @@ def initialize_model(model: nn.Module, cfg: dict, txt_padding_idx: int) -> None:
 
         # decoder rnn orthogonal initialization & LSTM forget gate
         if hasattr(model.decoder, "rnn"):
-
             if orthogonal:
                 orthogonal_rnn_init_(model.decoder.rnn)
 

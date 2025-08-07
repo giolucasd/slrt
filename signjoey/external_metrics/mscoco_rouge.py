@@ -59,9 +59,7 @@ def calc_score(hypotheses, references, beta=1.2):
     rec_max = max(rec)
 
     if prec_max != 0 and rec_max != 0:
-        score = ((1 + beta ** 2) * prec_max * rec_max) / float(
-            rec_max + beta ** 2 * prec_max
-        )
+        score = ((1 + beta**2) * prec_max * rec_max) / float(rec_max + beta**2 * prec_max)
     else:
         score = 0.0
     return score

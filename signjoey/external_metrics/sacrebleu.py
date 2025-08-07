@@ -30,13 +30,14 @@ import io
 import logging
 import math
 import os
+import ssl
 import portalocker
 import re
 import sys
 import unicodedata
 import urllib.request
 
-from collections import Counter, namedtuple
+from collections import Counter
 from itertools import zip_longest
 from typing import List, Iterable, Tuple, Union
 
@@ -52,9 +53,7 @@ try:
     signal(SIGPIPE, SIG_DFL)
 
 except ImportError:
-    logging.warning(
-        "Could not import signal.SIGPIPE (this is expected on Windows machines)"
-    )
+    logging.warning("Could not import signal.SIGPIPE (this is expected on Windows machines)")
 
 # Where to store downloaded test sets.
 # Define the environment variable $SACREBLEU, or use the default of ~/.sacrebleu.
@@ -93,9 +92,7 @@ DATASETS = {
         "ja-en": ["2:MTNT2019/ja-en.final.tsv", "3:MTNT2019/ja-en.final.tsv"],
     },
     "mtnt1.1/test": {
-        "data": [
-            "https://github.com/pmichel31415/mtnt/releases/download/v1.1/MTNT.1.1.tar.gz"
-        ],
+        "data": ["https://github.com/pmichel31415/mtnt/releases/download/v1.1/MTNT.1.1.tar.gz"],
         "description": "Test data for the Machine Translation of Noisy Text task: http://www.cs.cmu.edu/~pmichel1/mtnt/",
         "citation": '@InProceedings{michel2018a:mtnt,\n    author = "Michel, Paul and Neubig, Graham",\n    title = "MTNT: A Testbed for Machine Translation of Noisy Text",\n    booktitle = "Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing",\n    year = "2018",\n    publisher = "Association for Computational Linguistics",\n    pages = "543--553",\n    location = "Brussels, Belgium",\n    url = "http://aclweb.org/anthology/D18-1050"\n}',
         "md5": ["8ce1831ac584979ba8cdcd9d4be43e1d"],
@@ -105,9 +102,7 @@ DATASETS = {
         "ja-en": ["1:MTNT/test/test.ja-en.tsv", "2:MTNT/test/test.ja-en.tsv"],
     },
     "mtnt1.1/valid": {
-        "data": [
-            "https://github.com/pmichel31415/mtnt/releases/download/v1.1/MTNT.1.1.tar.gz"
-        ],
+        "data": ["https://github.com/pmichel31415/mtnt/releases/download/v1.1/MTNT.1.1.tar.gz"],
         "description": "Validation data for the Machine Translation of Noisy Text task: http://www.cs.cmu.edu/~pmichel1/mtnt/",
         "citation": '@InProceedings{michel2018a:mtnt,\n    author = "Michel, Paul and Neubig, Graham",\n    title = "MTNT: A Testbed for Machine Translation of Noisy Text",\n    booktitle = "Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing",\n    year = "2018",\n    publisher = "Association for Computational Linguistics",\n    pages = "543--553",\n    location = "Brussels, Belgium",\n    url = "http://aclweb.org/anthology/D18-1050"\n}',
         "md5": ["8ce1831ac584979ba8cdcd9d4be43e1d"],
@@ -117,9 +112,7 @@ DATASETS = {
         "ja-en": ["1:MTNT/valid/valid.ja-en.tsv", "2:MTNT/valid/valid.ja-en.tsv"],
     },
     "mtnt1.1/train": {
-        "data": [
-            "https://github.com/pmichel31415/mtnt/releases/download/v1.1/MTNT.1.1.tar.gz"
-        ],
+        "data": ["https://github.com/pmichel31415/mtnt/releases/download/v1.1/MTNT.1.1.tar.gz"],
         "description": "Training data for the Machine Translation of Noisy Text task: http://www.cs.cmu.edu/~pmichel1/mtnt/",
         "citation": '@InProceedings{michel2018a:mtnt,\n    author = "Michel, Paul and Neubig, Graham",\n    title = "MTNT: A Testbed for Machine Translation of Noisy Text",\n    booktitle = "Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing",\n    year = "2018",\n    publisher = "Association for Computational Linguistics",\n    pages = "543--553",\n    location = "Brussels, Belgium",\n    url = "http://aclweb.org/anthology/D18-1050"\n}',
         "md5": ["8ce1831ac584979ba8cdcd9d4be43e1d"],
@@ -1188,10 +1181,7 @@ SUBSETS = {
     "bbc.381736=OTHER-politics-KP cbsnews.248394=US-politics nytimes.184822=US-world telegraph.405408=US-politics euronews-en.153799=OTHER-politics-SY "
     "euronews-en.153826=EU-sport cnn.304400=US-world",
 }
-SUBSETS = {
-    k: {d.split("=")[0]: d.split("=")[1] for d in v.split()}
-    for (k, v) in SUBSETS.items()
-}
+SUBSETS = {k: {d.split("=")[0]: d.split("=")[1] for d in v.split()} for (k, v) in SUBSETS.items()}
 COUNTRIES = sorted(list({v.split("-")[0] for v in SUBSETS["wmt19"].values()}))
 DOMAINS = sorted(list({v.split("-")[1] for v in SUBSETS["wmt19"].values()}))
 
@@ -1218,15 +1208,9 @@ def tokenize_13a(line):
     # language-dependent part (assuming Western languages):
     norm = " {} ".format(norm)
     norm = re.sub(r"([\{-\~\[-\` -\&\(-\+\:-\@\/])", " \\1 ", norm)
-    norm = re.sub(
-        r"([^0-9])([\.,])", "\\1 \\2 ", norm
-    )  # tokenize period and comma unless preceded by a digit
-    norm = re.sub(
-        r"([\.,])([^0-9])", " \\1 \\2", norm
-    )  # tokenize period and comma unless followed by a digit
-    norm = re.sub(
-        r"([0-9])(-)", "\\1 \\2 ", norm
-    )  # tokenize dash when preceded by a digit
+    norm = re.sub(r"([^0-9])([\.,])", "\\1 \\2 ", norm)  # tokenize period and comma unless preceded by a digit
+    norm = re.sub(r"([\.,])([^0-9])", " \\1 \\2", norm)  # tokenize period and comma unless followed by a digit
+    norm = re.sub(r"([0-9])(-)", "\\1 \\2 ", norm)  # tokenize dash when preceded by a digit
     norm = re.sub(r"\s+", " ", norm)  # one space only between words
     norm = re.sub(r"^\s+", "", norm)  # no leading space
     norm = re.sub(r"\s+$", "", norm)  # no trailing space
@@ -1241,11 +1225,7 @@ class UnicodeRegex:
 
     @staticmethod
     def _property_chars(prefix):
-        return "".join(
-            chr(x)
-            for x in range(sys.maxunicode)
-            if unicodedata.category(chr(x)).startswith(prefix)
-        )
+        return "".join(chr(x) for x in range(sys.maxunicode) if unicodedata.category(chr(x)).startswith(prefix))
 
     @staticmethod
     @functools.lru_cache(maxsize=1)
@@ -1330,69 +1310,51 @@ def tokenize_zh(sentence):
         :param uchar: input char in unicode
         :return: whether the input char is a Chinese character.
         """
-        if (
-            uchar >= u"\u3400" and uchar <= u"\u4db5"
-        ):  # CJK Unified Ideographs Extension A, release 3.0
+        if uchar >= "\u3400" and uchar <= "\u4db5":  # CJK Unified Ideographs Extension A, release 3.0
+            return True
+        elif uchar >= "\u4e00" and uchar <= "\u9fa5":  # CJK Unified Ideographs, release 1.1
+            return True
+        elif uchar >= "\u9fa6" and uchar <= "\u9fbb":  # CJK Unified Ideographs, release 4.1
+            return True
+        elif uchar >= "\uf900" and uchar <= "\ufa2d":  # CJK Compatibility Ideographs, release 1.1
+            return True
+        elif uchar >= "\ufa30" and uchar <= "\ufa6a":  # CJK Compatibility Ideographs, release 3.2
+            return True
+        elif uchar >= "\ufa70" and uchar <= "\ufad9":  # CJK Compatibility Ideographs, release 4.1
+            return True
+        elif uchar >= "\u20000" and uchar <= "\u2a6d6":  # CJK Unified Ideographs Extension B, release 3.1
+            return True
+        elif uchar >= "\u2f800" and uchar <= "\u2fa1d":  # CJK Compatibility Supplement, release 3.1
             return True
         elif (
-            uchar >= u"\u4e00" and uchar <= u"\u9fa5"
-        ):  # CJK Unified Ideographs, release 1.1
-            return True
-        elif (
-            uchar >= u"\u9fa6" and uchar <= u"\u9fbb"
-        ):  # CJK Unified Ideographs, release 4.1
-            return True
-        elif (
-            uchar >= u"\uf900" and uchar <= u"\ufa2d"
-        ):  # CJK Compatibility Ideographs, release 1.1
-            return True
-        elif (
-            uchar >= u"\ufa30" and uchar <= u"\ufa6a"
-        ):  # CJK Compatibility Ideographs, release 3.2
-            return True
-        elif (
-            uchar >= u"\ufa70" and uchar <= u"\ufad9"
-        ):  # CJK Compatibility Ideographs, release 4.1
-            return True
-        elif (
-            uchar >= u"\u20000" and uchar <= u"\u2a6d6"
-        ):  # CJK Unified Ideographs Extension B, release 3.1
-            return True
-        elif (
-            uchar >= u"\u2f800" and uchar <= u"\u2fa1d"
-        ):  # CJK Compatibility Supplement, release 3.1
-            return True
-        elif (
-            uchar >= u"\uff00" and uchar <= u"\uffef"
+            uchar >= "\uff00" and uchar <= "\uffef"
         ):  # Full width ASCII, full width of English punctuation, half width Katakana, half wide half width kana, Korean alphabet
             return True
-        elif uchar >= u"\u2e80" and uchar <= u"\u2eff":  # CJK Radicals Supplement
+        elif uchar >= "\u2e80" and uchar <= "\u2eff":  # CJK Radicals Supplement
             return True
-        elif uchar >= u"\u3000" and uchar <= u"\u303f":  # CJK punctuation mark
+        elif uchar >= "\u3000" and uchar <= "\u303f":  # CJK punctuation mark
             return True
-        elif uchar >= u"\u31c0" and uchar <= u"\u31ef":  # CJK stroke
+        elif uchar >= "\u31c0" and uchar <= "\u31ef":  # CJK stroke
             return True
-        elif uchar >= u"\u2f00" and uchar <= u"\u2fdf":  # Kangxi Radicals
+        elif uchar >= "\u2f00" and uchar <= "\u2fdf":  # Kangxi Radicals
             return True
-        elif uchar >= u"\u2ff0" and uchar <= u"\u2fff":  # Chinese character structure
+        elif uchar >= "\u2ff0" and uchar <= "\u2fff":  # Chinese character structure
             return True
-        elif uchar >= u"\u3100" and uchar <= u"\u312f":  # Phonetic symbols
+        elif uchar >= "\u3100" and uchar <= "\u312f":  # Phonetic symbols
             return True
-        elif (
-            uchar >= u"\u31a0" and uchar <= u"\u31bf"
-        ):  # Phonetic symbols (Taiwanese and Hakka expansion)
+        elif uchar >= "\u31a0" and uchar <= "\u31bf":  # Phonetic symbols (Taiwanese and Hakka expansion)
             return True
-        elif uchar >= u"\ufe10" and uchar <= u"\ufe1f":
+        elif uchar >= "\ufe10" and uchar <= "\ufe1f":
             return True
-        elif uchar >= u"\ufe30" and uchar <= u"\ufe4f":
+        elif uchar >= "\ufe30" and uchar <= "\ufe4f":
             return True
-        elif uchar >= u"\u2600" and uchar <= u"\u26ff":
+        elif uchar >= "\u2600" and uchar <= "\u26ff":
             return True
-        elif uchar >= u"\u2700" and uchar <= u"\u27bf":
+        elif uchar >= "\u2700" and uchar <= "\u27bf":
             return True
-        elif uchar >= u"\u3200" and uchar <= u"\u32ff":
+        elif uchar >= "\u3200" and uchar <= "\u32ff":
             return True
-        elif uchar >= u"\u3300" and uchar <= u"\u33ff":
+        elif uchar >= "\u3300" and uchar <= "\u33ff":
             return True
 
         return False
@@ -1505,12 +1467,7 @@ def bleu_signature(args, numrefs):
     if args.subset is not None:
         signature["subset"] = args.subset
 
-    sigstr = "+".join(
-        [
-            "{}.{}".format(abbr[x] if args.short else x, signature[x])
-            for x in sorted(signature.keys())
-        ]
-    )
+    sigstr = "+".join(["{}.{}".format(abbr[x] if args.short else x, signature[x]) for x in sorted(signature.keys())])
 
     return sigstr
 
@@ -1554,12 +1511,7 @@ def chrf_signature(args, numrefs):
     if args.subset is not None:
         signature["subset"] = args.subset
 
-    sigstr = "+".join(
-        [
-            "{}.{}".format(abbr[x] if args.short else x, signature[x])
-            for x in sorted(signature.keys())
-        ]
-    )
+    sigstr = "+".join(["{}.{}".format(abbr[x] if args.short else x, signature[x]) for x in sorted(signature.keys())])
 
     return sigstr
 
@@ -1699,9 +1651,7 @@ def download_test_set(test_set, langpair=None):
             if not os.path.exists(tarball) or os.path.getsize(tarball) == 0:
                 logging.info("Downloading %s to %s", dataset, tarball)
                 try:
-                    with urllib.request.urlopen(dataset) as f, open(
-                        tarball, "wb"
-                    ) as out:
+                    with urllib.request.urlopen(dataset) as f, open(tarball, "wb") as out:
                         out.write(f.read())
                 except ssl.SSLError:
                     logging.warning(
@@ -1723,11 +1673,7 @@ def download_test_set(test_set, langpair=None):
                                 md5.hexdigest(), expected_md5
                             )
                         )
-                        logging.error(
-                            'Please manually delete "{}" and rerun the command.'.format(
-                                tarball
-                            )
-                        )
+                        logging.error('Please manually delete "{}" and rerun the command.'.format(tarball))
                         logging.error(
                             "If the problem persists, the tarball may have changed, in which case, please contact the SacreBLEU maintainer."
                         )
@@ -1794,7 +1740,6 @@ class Result:
 
 class BLEU:
     def __init__(self, scores, counts, totals, precisions, bp, sys_len, ref_len):
-
         self.scores = scores
         self.counts = counts
         self.totals = totals
@@ -1807,7 +1752,6 @@ class BLEU:
         precisions = "/".join(["{:.1f}".format(p) for p in self.precisions])
         return "BLEU = {scores} {precisions} (BP = {bp:.3f} ratio = {ratio:.3f} hyp_len = {sys_len:d} ref_len = {ref_len:d})".format(
             scores=self.scores,
-            width=width,
             precisions=precisions,
             bp=self.bp,
             ratio=self.sys_len / self.ref_len,
@@ -1887,10 +1831,7 @@ def compute_bleu(
 
     scores = []
     for effective_order in range(1, NGRAM_ORDER + 1):
-        scores.append(
-            brevity_penalty
-            * math.exp(sum(map(my_log, precisions[:effective_order])) / effective_order)
-        )
+        scores.append(brevity_penalty * math.exp(sum(map(my_log, precisions[:effective_order])) / effective_order))
 
     return BLEU(scores, correct, total, precisions, brevity_penalty, sys_len, ref_len)
 
@@ -1974,9 +1915,7 @@ def corpus_bleu(
 
             if tokenized_count == 100:
                 logging.warning("That's 100 lines that end in a tokenized period ('.')")
-                logging.warning(
-                    "It looks like you forgot to detokenize your test data, which may hurt your score."
-                )
+                logging.warning("It looks like you forgot to detokenize your test data, which may hurt your score.")
                 logging.warning(
                     "If you insist your data is detokenized, or don't care, you can suppress this message with '--force'."
                 )
@@ -2059,17 +1998,13 @@ def get_corpus_statistics(
 ) -> List[float]:
     corpus_statistics = [0] * (order * 3)
     for hypothesis, reference in zip(hypotheses, references):
-        statistics = get_sentence_statistics(
-            hypothesis, reference, order=order, remove_whitespace=remove_whitespace
-        )
+        statistics = get_sentence_statistics(hypothesis, reference, order=order, remove_whitespace=remove_whitespace)
         for i in range(len(statistics)):
             corpus_statistics[i] += statistics[i]
     return corpus_statistics
 
 
-def _avg_precision_and_recall(
-    statistics: List[float], order: int
-) -> Tuple[float, float]:
+def _avg_precision_and_recall(statistics: List[float], order: int) -> Tuple[float, float]:
     avg_precision = 0.0
     avg_recall = 0.0
     effective_order = 0
@@ -2091,12 +2026,8 @@ def _avg_precision_and_recall(
 def _chrf(avg_precision, avg_recall, beta: int = CHRF_BETA) -> float:
     if avg_precision + avg_recall == 0:
         return 0.0
-    beta_square = beta ** 2
-    score = (
-        (1 + beta_square)
-        * (avg_precision * avg_recall)
-        / ((beta_square * avg_precision) + avg_recall)
-    )
+    beta_square = beta**2
+    score = (1 + beta_square) * (avg_precision * avg_recall) / ((beta_square * avg_precision) + avg_recall)
     return score
 
 
@@ -2117,9 +2048,7 @@ def corpus_chrf(
     :param beta: Defines importance of recall w.r.t precision. If beta=1, same importance.
     :return: Chrf score.
     """
-    corpus_statistics = get_corpus_statistics(
-        hypotheses, references, order=order, remove_whitespace=remove_whitespace
-    )
+    corpus_statistics = get_corpus_statistics(hypotheses, references, order=order, remove_whitespace=remove_whitespace)
     avg_precision, avg_recall = _avg_precision_and_recall(corpus_statistics, order)
     return CHRF(_chrf(avg_precision, avg_recall, beta=beta))
 
@@ -2141,15 +2070,13 @@ def sentence_chrf(
     :param beta: Defines importance of recall w.r.t precision. If beta=1, same importance.
     :return: Chrf score.
     """
-    statistics = get_sentence_statistics(
-        hypothesis, reference, order=order, remove_whitespace=remove_whitespace
-    )
+    statistics = get_sentence_statistics(hypothesis, reference, order=order, remove_whitespace=remove_whitespace)
     avg_precision, avg_recall = _avg_precision_and_recall(statistics, order)
     return CHRF(_chrf(avg_precision, avg_recall, beta=beta))
 
 
 def get_a_list_of_testset_names():
-    """Return a string with a formatted list of available test sets plus their descriptions. """
+    """Return a string with a formatted list of available test sets plus their descriptions."""
     message = "The available test sets are:"
     for testset in sorted(DATASETS.keys(), reverse=True):
         message += "\n%20s: %s" % (testset, DATASETS[testset].get("description", ""))
@@ -2160,9 +2087,7 @@ def _available_origlangs(test_sets, langpair):
     """Return a list of origlang values in according to the raw SGM files."""
     origlangs = set()
     for test_set in test_sets.split(","):
-        rawfile = os.path.join(
-            SACREBLEU_DIR, test_set, "raw", DATASETS[test_set][langpair][0]
-        )
+        rawfile = os.path.join(SACREBLEU_DIR, test_set, "raw", DATASETS[test_set][langpair][0])
         if rawfile.endswith(".sgm"):
             with smart_open(rawfile) as fin:
                 for line in fin:
@@ -2177,24 +2102,16 @@ def _filter_subset(systems, test_sets, langpair, origlang, subset=None):
     if origlang is None and subset is None:
         return systems
     if test_sets is None or langpair is None:
-        raise ValueError(
-            "Filtering for --origlang or --subset needs a test (-t) and a language pair (-l)."
-        )
+        raise ValueError("Filtering for --origlang or --subset needs a test (-t) and a language pair (-l).")
 
     indices_to_keep = []
     for test_set in test_sets.split(","):
-        rawfile = os.path.join(
-            SACREBLEU_DIR, test_set, "raw", DATASETS[test_set][langpair][0]
-        )
+        rawfile = os.path.join(SACREBLEU_DIR, test_set, "raw", DATASETS[test_set][langpair][0])
         if not rawfile.endswith(".sgm"):
-            raise Exception(
-                "--origlang and --subset supports only *.sgm files, not %s", rawfile
-            )
+            raise Exception("--origlang and --subset supports only *.sgm files, not %s", rawfile)
         if subset is not None:
             if test_set not in SUBSETS:
-                raise Exception(
-                    "No subset annotation available for test set " + test_set
-                )
+                raise Exception("No subset annotation available for test set " + test_set)
             doc_to_tags = SUBSETS[test_set]
         number_sentences_included = 0
         with smart_open(rawfile) as fin:
@@ -2216,10 +2133,7 @@ def _filter_subset(systems, test_sets, langpair, origlang, subset=None):
                 if line.startswith("<seg "):
                     indices_to_keep.append(include_doc)
                     number_sentences_included += 1 if include_doc else 0
-    return [
-        [sentence for sentence, keep in zip(sys, indices_to_keep) if keep]
-        for sys in systems
-    ]
+    return [[sentence for sentence, keep in zip(sys, indices_to_keep) if keep] for sys in systems]
 
 
 def main():
@@ -2290,9 +2204,7 @@ def main():
         default=None,
         help="use a subset of sentences whose document annotation matches a give regex (see SUBSETS in the source code)",
     )
-    arg_parser.add_argument(
-        "--download", type=str, default=None, help="download a test set and quit"
-    )
+    arg_parser.add_argument("--download", type=str, default=None, help="download a test set and quit")
     arg_parser.add_argument(
         "--echo",
         choices=["src", "ref", "both"],
@@ -2406,15 +2318,11 @@ def main():
         action="store_true",
         help="print extra information (split test sets based on origlang)",
     )
-    arg_parser.add_argument(
-        "-V", "--version", action="version", version="%(prog)s {}".format(VERSION)
-    )
+    arg_parser.add_argument("-V", "--version", action="version", version="%(prog)s {}".format(VERSION))
     args = arg_parser.parse_args()
 
     # Explicitly set the encoding
-    sys.stdin = open(
-        sys.stdin.fileno(), mode="r", encoding="utf-8", buffering=True, newline="\n"
-    )
+    sys.stdin = open(sys.stdin.fileno(), mode="r", encoding="utf-8", buffering=True, newline="\n")
     sys.stdout = open(sys.stdout.fileno(), mode="w", encoding="utf-8", buffering=True)
 
     if not args.quiet:
@@ -2447,31 +2355,23 @@ def main():
         logging.error(
             "The --num-refs argument allows you to provide any number of tab-delimited references in a single file."
         )
-        logging.error(
-            "You can only use it with externaly-provided references, however (i.e., not with `-t`),"
-        )
+        logging.error("You can only use it with externaly-provided references, however (i.e., not with `-t`),")
         logging.error("and you cannot then provide multiple reference files.")
         sys.exit(1)
 
     if args.test_set is not None:
         for test_set in args.test_set.split(","):
             if test_set not in DATASETS:
-                logging.error(
-                    'Unknown test set "%s"\n%s', test_set, get_a_list_of_testset_names()
-                )
+                logging.error('Unknown test set "%s"\n%s', test_set, get_a_list_of_testset_names())
                 sys.exit(1)
 
     if args.test_set is None:
         if len(args.refs) == 0:
-            logging.error(
-                "I need either a predefined test set (-t) or a list of references"
-            )
+            logging.error("I need either a predefined test set (-t) or a list of references")
             logging.error(get_a_list_of_testset_names())
             sys.exit(1)
     elif len(args.refs) > 0:
-        logging.error(
-            "I need exactly one of (a) a predefined test set (-t) or (b) a list of references"
-        )
+        logging.error("I need exactly one of (a) a predefined test set (-t) or (b) a list of references")
         sys.exit(1)
     elif args.langpair is None:
         logging.error("I need a language pair (-l).")
@@ -2492,9 +2392,7 @@ def main():
             logging.warning("--echo requires a test set (--t) and a language pair (-l)")
             sys.exit(1)
         for test_set in args.test_set.split(","):
-            print_test_set(
-                test_set, args.langpair, args.echo, args.origlang, args.subset
-            )
+            print_test_set(test_set, args.langpair, args.echo, args.origlang, args.subset)
         sys.exit(0)
 
     if args.test_set is not None and args.tokenize == "none":
@@ -2528,11 +2426,7 @@ def main():
         for test_set in args.test_set.split(","):
             _, *ref_files = download_test_set(test_set, args.langpair)
             if len(ref_files) == 0:
-                logging.warning(
-                    "No references found for test set {}/{}.".format(
-                        test_set, args.langpair
-                    )
-                )
+                logging.warning("No references found for test set {}/{}.".format(test_set, args.langpair))
             concat_ref_files.append(ref_files)
 
     inputfh = (
@@ -2546,9 +2440,7 @@ def main():
     full_refs = [[] for x in range(max(len(concat_ref_files[0]), args.num_refs))]
     for ref_files in concat_ref_files:
         for refno, ref_file in enumerate(ref_files):
-            for lineno, line in enumerate(
-                smart_open(ref_file, encoding=args.encoding), 1
-            ):
+            for lineno, line in enumerate(smart_open(ref_file, encoding=args.encoding), 1):
                 if args.num_refs != 1:
                     splits = line.rstrip().split(sep="\t", maxsplit=args.num_refs - 1)
                     if len(splits) != args.num_refs:
@@ -2651,11 +2543,7 @@ def main():
     if args.detail:
         width = args.width
         sents_digits = len(str(len(full_system)))
-        origlangs = (
-            args.origlang
-            if args.origlang
-            else _available_origlangs(args.test_set, args.langpair)
-        )
+        origlangs = args.origlang if args.origlang else _available_origlangs(args.test_set, args.langpair)
         for origlang in origlangs:
             subsets = [None]
             if args.subset is not None:
@@ -2739,11 +2627,7 @@ def display_metric(metrics_to_print, results, num_refs, args):
                 print("{0:.{1}f}".format(result.score, args.width))
             else:
                 version_str = chrf_signature(args, num_refs)
-                print(
-                    "chrF{0:d}+{1} = {2:.{3}f}".format(
-                        args.chrf_beta, version_str, result.score, args.width
-                    )
-                )
+                print("chrF{0:d}+{1} = {2:.{3}f}".format(args.chrf_beta, version_str, result.score, args.width))
 
 
 if __name__ == "__main__":

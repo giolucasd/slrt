@@ -2,7 +2,8 @@
 """
 Collection of builder functions
 """
-from typing import Callable, Optional, Generator
+
+from typing import Callable, Optional
 
 import torch
 from torch import nn
@@ -31,14 +32,10 @@ def build_gradient_clipper(config: dict) -> Optional[Callable]:
     clip_grad_fun = None
     if "clip_grad_val" in config.keys():
         clip_value = config["clip_grad_val"]
-        clip_grad_fun = lambda params: nn.utils.clip_grad_value_(
-            parameters=params, clip_value=clip_value
-        )
+        clip_grad_fun = lambda params: nn.utils.clip_grad_value_(parameters=params, clip_value=clip_value)  # noqa: E731
     elif "clip_grad_norm" in config.keys():
         max_norm = config["clip_grad_norm"]
-        clip_grad_fun = lambda params: nn.utils.clip_grad_norm_(
-            parameters=params, max_norm=max_norm
-        )
+        clip_grad_fun = lambda params: nn.utils.clip_grad_norm_(parameters=params, max_norm=max_norm)  # noqa: E731
 
     if "clip_grad_val" in config.keys() and "clip_grad_norm" in config.keys():
         raise ValueError("You can only specify either clip_grad_val or clip_grad_norm.")
@@ -197,16 +194,12 @@ def build_scheduler(
         )
     elif scheduler_name == "decaying":
         return (
-            lr_scheduler.StepLR(
-                optimizer=optimizer, step_size=config.get("decaying_step_size", 1)
-            ),
+            lr_scheduler.StepLR(optimizer=optimizer, step_size=config.get("decaying_step_size", 1)),
             "epoch",
         )
     elif scheduler_name == "exponential":
         return (
-            lr_scheduler.ExponentialLR(
-                optimizer=optimizer, gamma=config.get("decrease_factor", 0.99)
-            ),
+            lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=config.get("decrease_factor", 0.99)),
             "epoch",
         )
     elif scheduler_name == "noam":
@@ -280,10 +273,7 @@ class NoamScheduler:
     def _compute_rate(self):
         """Implement `lrate` above"""
         step = self._step
-        return self.factor * (
-            self.hidden_size ** (-0.5)
-            * min(step ** (-0.5), step * self.warmup ** (-1.5))
-        )
+        return self.factor * (self.hidden_size ** (-0.5) * min(step ** (-0.5), step * self.warmup ** (-1.5)))
 
     # pylint: disable=no-self-use
     def state_dict(self):
@@ -341,7 +331,7 @@ class WarmupExponentialDecayScheduler:
             rate = step * self.peak_rate / warmup
         else:
             exponent = (step - warmup) / self.decay_length
-            rate = self.peak_rate * (self.decay_rate ** exponent)
+            rate = self.peak_rate * (self.decay_rate**exponent)
         return max(rate, self.min_rate)
 
     # pylint: disable=no-self-use

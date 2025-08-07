@@ -84,9 +84,7 @@ def recurrent_greedy(
         - stacked_attention_scores: attention scores (3d array)
     """
     batch_size = src_mask.size(0)
-    prev_y = src_mask.new_full(
-        size=[batch_size, 1], fill_value=bos_index, dtype=torch.long
-    )
+    prev_y = src_mask.new_full(size=[batch_size, 1], fill_value=bos_index, dtype=torch.long)
     output = []
     attention_scores = []
     hidden = None
@@ -163,7 +161,6 @@ def transformer_greedy(
     finished = src_mask.new_zeros((batch_size)).byte()
 
     for _ in range(max_output_length):
-
         trg_embed = embed(ys)  # embed the previous tokens
 
         # pylint: disable=unused-variable
@@ -250,9 +247,7 @@ def beam_search(
     if hidden is not None:
         hidden = tile(hidden, size, dim=1)  # layers x batch*k x dec_hidden_size
 
-    encoder_output = tile(
-        encoder_output.contiguous(), size, dim=0
-    )  # batch*k x src_len x enc_hidden_size
+    encoder_output = tile(encoder_output.contiguous(), size, dim=0)  # batch*k x src_len x enc_hidden_size
     src_mask = tile(src_mask, size, dim=0)  # batch*k x 1 x src_len
 
     # Transformer only: create target mask
@@ -262,15 +257,11 @@ def beam_search(
         trg_mask = None
 
     # numbering elements in the batch
-    batch_offset = torch.arange(
-        batch_size, dtype=torch.long, device=encoder_output.device
-    )
+    batch_offset = torch.arange(batch_size, dtype=torch.long, device=encoder_output.device)
 
     # numbering elements in the extended batch, i.e. beam size copies of each
     # batch element
-    beam_offset = torch.arange(
-        0, batch_size * size, step=size, dtype=torch.long, device=encoder_output.device
-    )
+    beam_offset = torch.arange(0, batch_size * size, step=size, dtype=torch.long, device=encoder_output.device)
 
     # keeps track of the top beam size hypotheses to expand for each element
     # in the batch to be further decoded (that are still "alive")
@@ -295,7 +286,6 @@ def beam_search(
     }
 
     for step in range(max_output_length):
-
         # This decides which part of the predicted sentence we feed to the
         # decoder to make the next prediction.
         # For Transformer, we feed the complete predicted sentence so far.
@@ -356,9 +346,7 @@ def beam_search(
         topk_ids = topk_ids.fmod(decoder.output_size)
 
         # map beam_index to batch_index in the flat representation
-        batch_index = topk_beam_index + beam_offset[
-            : topk_beam_index.size(0)
-        ].unsqueeze(1)
+        batch_index = topk_beam_index + beam_offset[: topk_beam_index.size(0)].unsqueeze(1)
         select_indices = batch_index.view(-1)
 
         # append latest prediction
@@ -409,9 +397,7 @@ def beam_search(
             topk_log_probs = topk_log_probs.index_select(0, non_finished)
             batch_index = batch_index.index_select(0, non_finished)
             batch_offset = batch_offset.index_select(0, non_finished)
-            alive_seq = predictions.index_select(0, non_finished).view(
-                -1, alive_seq.size(-1)
-            )
+            alive_seq = predictions.index_select(0, non_finished).view(-1, alive_seq.size(-1))
 
         # reorder indices, outputs and masks
         select_indices = batch_index.view(-1)
@@ -433,9 +419,7 @@ def beam_search(
             att_vectors = att_vectors.index_select(0, select_indices)
 
     def pad_and_stack_hyps(hyps, pad_value):
-        filled = (
-            np.ones((len(hyps), max([h.shape[0] for h in hyps])), dtype=int) * pad_value
-        )
+        filled = np.ones((len(hyps), max([h.shape[0] for h in hyps])), dtype=int) * pad_value
         for j, h in enumerate(hyps):
             for k, i in enumerate(h):
                 filled[j, k] = i
@@ -444,8 +428,6 @@ def beam_search(
     # from results to stacked outputs
     assert n_best == 1
     # only works for n_best=1 for now
-    final_outputs = pad_and_stack_hyps(
-        [r[0].cpu().numpy() for r in results["predictions"]], pad_value=pad_index
-    )
+    final_outputs = pad_and_stack_hyps([r[0].cpu().numpy() for r in results["predictions"]], pad_value=pad_index)
 
     return final_outputs, None
