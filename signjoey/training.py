@@ -5,7 +5,7 @@ import os
 import queue
 import shutil
 import time
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 from torch import Tensor
@@ -588,7 +588,7 @@ class TrainManager:
 
         self.tb_writer.close()  # close Tensorboard writer
 
-    def _train_batch(self, batch: Batch, update: bool = True) -> (Tensor, Tensor):
+    def _train_batch(self, batch: Batch, update: bool = True) -> Tuple[Tensor, Tensor]:
         """
         Train the model on one batch: Compute the loss, make a gradient step.
 
